@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and validate the distributable No AI Slop plugin archive."""
+"""Build and validate the distributable No AI Slop Korean plugin archive."""
 
 from __future__ import annotations
 
@@ -13,7 +13,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / ".codex-plugin" / "plugin.json"
 DIST = ROOT / "dist"
-SKILL_ROOT = ROOT / "skills" / "no-ai-slop"
+SKILL_NAME = "no-ai-slop-ko"
+SKILL_ROOT = ROOT / "skills" / SKILL_NAME
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,30 +47,36 @@ def validate_source(manifest: dict) -> None:
     if len(prompts) > 3 or any(len(prompt) > 128 for prompt in prompts):
         raise SystemExit("Starter prompts must contain at most three entries of 128 characters or fewer")
 
-    for source in (SKILL_ROOT / "SKILL.md", SKILL_ROOT / "eval.md", ROOT / "assets" / "no-ai-slop.png"):
+    required_sources = (
+        SKILL_ROOT / "SKILL.md",
+        SKILL_ROOT / "eval.md",
+        SKILL_ROOT / "agents" / "openai.yaml",
+        SKILL_ROOT / "references" / "korean-patterns.md",
+        ROOT / "assets" / "no-ai-slop.png",
+    )
+    for source in required_sources:
         if not source.is_file():
             raise SystemExit(f"Missing package source: {source.relative_to(ROOT)}")
 
 
 def build_plugin(manifest: dict) -> tuple[Path, Path]:
-    plugin_root = DIST / "no-ai-slop"
+    plugin_root = DIST / SKILL_NAME
     if plugin_root.exists():
         shutil.rmtree(plugin_root)
 
-    skill_root = plugin_root / "skills" / "no-ai-slop"
+    skill_root = plugin_root / "skills" / SKILL_NAME
     (plugin_root / ".codex-plugin").mkdir(parents=True)
     (plugin_root / "assets").mkdir(parents=True)
-    skill_root.mkdir(parents=True)
+    skill_root.parent.mkdir(parents=True)
 
     shutil.copy2(MANIFEST, plugin_root / ".codex-plugin" / "plugin.json")
-    shutil.copy2(SKILL_ROOT / "SKILL.md", skill_root / "SKILL.md")
-    shutil.copy2(SKILL_ROOT / "eval.md", skill_root / "eval.md")
+    shutil.copytree(SKILL_ROOT, skill_root)
     shutil.copy2(ROOT / "assets" / "no-ai-slop.png", plugin_root / "assets" / "no-ai-slop.png")
     shutil.copy2(ROOT / "LICENSE", plugin_root / "LICENSE")
     shutil.copy2(ROOT / "PRIVACY.md", plugin_root / "PRIVACY.md")
     shutil.copy2(ROOT / "TERMS.md", plugin_root / "TERMS.md")
 
-    archive = DIST / f"no-ai-slop-plugin-{manifest['version']}.zip"
+    archive = DIST / f"{SKILL_NAME}-plugin-{manifest['version']}.zip"
     if archive.exists():
         archive.unlink()
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as output:
@@ -83,8 +90,10 @@ def validate_build(plugin_root: Path, archive: Path) -> None:
     expected = {
         ".codex-plugin/plugin.json",
         "assets/no-ai-slop.png",
-        "skills/no-ai-slop/SKILL.md",
-        "skills/no-ai-slop/eval.md",
+        "skills/no-ai-slop-ko/SKILL.md",
+        "skills/no-ai-slop-ko/eval.md",
+        "skills/no-ai-slop-ko/agents/openai.yaml",
+        "skills/no-ai-slop-ko/references/korean-patterns.md",
         "LICENSE",
         "PRIVACY.md",
         "TERMS.md",
@@ -97,12 +106,15 @@ def validate_build(plugin_root: Path, archive: Path) -> None:
     if expected != actual:
         raise SystemExit(f"Unexpected package files: expected {sorted(expected)}, found {sorted(actual)}")
 
-    packaged_skill = plugin_root / "skills" / "no-ai-slop" / "SKILL.md"
-    packaged_eval = plugin_root / "skills" / "no-ai-slop" / "eval.md"
+    packaged_skill = plugin_root / "skills" / SKILL_NAME / "SKILL.md"
+    packaged_eval = plugin_root / "skills" / SKILL_NAME / "eval.md"
+    packaged_patterns = plugin_root / "skills" / SKILL_NAME / "references" / "korean-patterns.md"
     if packaged_skill.read_bytes() != (SKILL_ROOT / "SKILL.md").read_bytes():
         raise SystemExit("Packaged SKILL.md does not match the canonical file")
     if packaged_eval.read_bytes() != (SKILL_ROOT / "eval.md").read_bytes():
         raise SystemExit("Packaged eval.md does not match the canonical file")
+    if packaged_patterns.read_bytes() != (SKILL_ROOT / "references" / "korean-patterns.md").read_bytes():
+        raise SystemExit("Packaged Korean patterns do not match the canonical file")
     if not zipfile.is_zipfile(archive):
         raise SystemExit("Plugin archive is not a valid ZIP file")
 
